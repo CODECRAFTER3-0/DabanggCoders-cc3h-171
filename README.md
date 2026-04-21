@@ -1,3 +1,5 @@
+
+
 # Gugglu Learning Land
 
 Gugglu Learning Land is a playful browser-based learning app for children built with React, Vite, and MediaPipe hand tracking. It combines gesture-driven mini-games, a child onboarding flow, and a parent dashboard that shows progress, strengths, weak areas, and live activity notifications.
