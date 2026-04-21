@@ -10,35 +10,52 @@ export const CameraFeed = forwardRef<HTMLVideoElement, CameraFeedProps>(({ onVid
   const [status, setStatus] = useState<'initializing' | 'ready' | 'error'>('initializing');
 
   useEffect(() => {
+    let activeStream: MediaStream | null = null;
+    let isMounted = true;
+    let videoEl: HTMLVideoElement | null = null;
+    
     async function setupCamera() {
       if (!ref || typeof ref === 'function' || !ref.current) return;
-      const video = ref.current;
+      videoEl = ref.current;
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            // PERFORMANCE UPGRADE: Throttling the optical feed.
-            // MediaPipe doesn't need 720p to find a hand. 480p cuts the pixel math by 66%.
             width: { ideal: 640 },
             height: { ideal: 480 },
-            frameRate: { ideal: 30 }, // Prevents the camera from trying to pull 60fps and locking the main thread
+            frameRate: { ideal: 30 },
             facingMode: 'user'
           }
         });
-        video.srcObject = stream;
-        video.onloadedmetadata = () => {
-          video.play();
-          // Add a tiny delay to ensure the video isn't black when it fades in
+        if (!isMounted) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        activeStream = stream;
+        videoEl.srcObject = stream;
+        videoEl.onloadedmetadata = () => {
+          videoEl?.play();
           setTimeout(() => {
-            setStatus('ready');
-            if (onVideoReady) onVideoReady();
+            if (isMounted) setStatus('ready');
+            if (isMounted && onVideoReady) onVideoReady();
           }, 300);
         };
       } catch (err) {
         console.error("Error accessing webcam:", err);
-        setStatus('error');
+        if (isMounted) setStatus('error');
       }
     }
     setupCamera();
+
+    return () => {
+      isMounted = false;
+      if (activeStream) {
+        activeStream.getTracks().forEach(t => t.stop());
+      }
+      if (videoEl) {
+        videoEl.pause();
+        videoEl.srcObject = null;
+      }
+    };
   }, [ref, onVideoReady]);
 
   return (

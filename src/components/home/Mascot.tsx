@@ -6,6 +6,7 @@ interface MascotProps {
   state: MascotState;
   line: string;
   nonce: number;
+  position?: 'left' | 'right';
 }
 
 type MascotSourceMode = 'remote' | 'fallback';
@@ -49,7 +50,7 @@ function createMascotPlaceholder(state: MascotState) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
-export function Mascot({ state, line, nonce }: MascotProps) {
+export function Mascot({ state, line, nonce, position = 'right' }: MascotProps) {
   const [sourceModes, setSourceModes] = useState<Record<MascotState, MascotSourceMode>>(() =>
     buildStateRecord(() => 'remote'),
   );
@@ -103,7 +104,7 @@ export function Mascot({ state, line, nonce }: MascotProps) {
 
   return (
     <div
-      className="fixed bottom-3 right-2 sm:bottom-5 sm:right-5 z-[70] pointer-events-none"
+      className={`fixed bottom-3 sm:bottom-5 z-[70] pointer-events-none ${position === 'left' ? 'left-2 sm:left-5' : 'right-2 sm:right-5'}`}
       data-mascot-visual={`${visibleState}-${nonce}`}
     >
       <AnimatePresence mode="wait">
@@ -114,7 +115,7 @@ export function Mascot({ state, line, nonce }: MascotProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.92 }}
             transition={{ duration: 0.28 }}
-            className="mb-3 ml-auto max-w-[220px] sm:max-w-[280px] rounded-[28px] border-[4px] border-white bg-amber-200 px-4 py-3 text-right shadow-[0_16px_0_rgba(0,0,0,0.2)]"
+            className={`mb-3 max-w-[220px] sm:max-w-[280px] rounded-[28px] border-[4px] border-white bg-amber-200 px-4 py-3 shadow-[0_16px_0_rgba(0,0,0,0.2)] ${position === 'left' ? 'mr-auto text-left' : 'ml-auto text-right'}`}
           >
             <p
               className="text-xl font-black text-rose-600 leading-tight"

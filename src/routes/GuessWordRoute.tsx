@@ -320,9 +320,33 @@ export function GuessWordRoute() {
   }, [handTrackingReady, currentWord, playSound, speak]);
 
   useEffect(() => {
+    const videoEl = videoRef.current;
+    let activeStream: MediaStream | null = null;
+    let isMounted = true;
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } })
-      .then(stream => { if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); } })
+      .then(stream => { 
+        if (!isMounted) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        activeStream = stream;
+        if (videoEl) { 
+          videoEl.srcObject = stream; 
+          videoEl.play(); 
+        } 
+      })
       .catch(err => console.error(err));
+      
+    return () => {
+      isMounted = false;
+      if (activeStream) {
+        activeStream.getTracks().forEach(t => t.stop());
+      }
+      if (videoEl) {
+        videoEl.pause();
+        videoEl.srcObject = null;
+      }
+    };
   }, []);
 
   return (

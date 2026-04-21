@@ -68,17 +68,24 @@ export function DeafLuminaRoute() {
 
   // START CAMERA IMMEDIATELY ON LOAD
   useEffect(() => {
+    const videoEl = videoRef.current;
     let stream: MediaStream | null = null;
+    let isMounted = true;
     
     const initCamera = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
+        const newStream = await navigator.mediaDevices.getUserMedia({ 
           video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } 
         });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute("playsinline", "true"); // Fix for iOS
-          await videoRef.current.play();
+        if (!isMounted) {
+          newStream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        stream = newStream;
+        if (videoEl) {
+          videoEl.srcObject = stream;
+          videoEl.setAttribute("playsinline", "true"); // Fix for iOS
+          await videoEl.play();
         }
       } catch (err) {
         console.error("Camera failed to start:", err);
@@ -88,7 +95,12 @@ export function DeafLuminaRoute() {
     initCamera();
 
     return () => {
+      isMounted = false;
       if (stream) stream.getTracks().forEach(t => t.stop());
+      if (videoEl) {
+        videoEl.pause();
+        videoEl.srcObject = null;
+      }
     };
   }, []);
 

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useHandTracking } from '../../hooks/useHandTracking';
-import { GestureCursor } from './GestureCursor';
 import { Mascot } from './Mascot';
 import { SubjectCard } from './SubjectCard';
 import {
@@ -12,7 +10,6 @@ import {
 } from '../../data/mascotConfig';
 import { subjects } from '../../data/subjects';
 
-const HOLD_DURATION_MS = 1000;
 const SPEECH_RATE = 0.9;
 const SPEECH_PITCH = 1.1;
 
@@ -28,12 +25,8 @@ type HoverTarget =
 
 export function HomeScreen() {
   const navigate = useNavigate();
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const { cursor, isReady: handTrackingReady } = useHandTracking(videoRef);
 
-  const [cameraStatus, setCameraStatus] = useState<'initializing' | 'ready' | 'error'>('initializing');
   const [hoveredTarget, setHoveredTarget] = useState<HoverTarget>(null);
-  const [holdProgress, setHoldProgress] = useState(0);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [mascotState, setMascotStateValue] = useState<MascotState>('idle');
   const [mascotLine, setMascotLine] = useState('');
@@ -41,34 +34,15 @@ export function HomeScreen() {
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const hoverTimeoutRef = useRef<number | null>(null);
-  const holdFrameRef = useRef<number | null>(null);
-  const holdTargetRef = useRef<string | null>(null);
-  const holdStartedAtRef = useRef(0);
   const didWelcomeRef = useRef(false);
   const hoveredRef = useRef<string | null>(null);
   const speechTimeoutRef = useRef<number | null>(null);
   const mascotResetRef = useRef<number | null>(null);
-  const subjectRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const popupGameRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-  const popupBackRef = useRef<HTMLButtonElement | null>(null);
-  const previousPinchRef = useRef(false);
 
   const selectedSubject = useMemo(
     () => subjects.find((subject) => subject.id === selectedSubjectId) ?? null,
     [selectedSubjectId],
   );
-
-  const isHomeReady = cameraStatus === 'ready' && handTrackingReady;
-
-  const clearHoldLoop = useCallback(() => {
-    if (holdFrameRef.current) {
-      cancelAnimationFrame(holdFrameRef.current);
-      holdFrameRef.current = null;
-    }
-    holdTargetRef.current = null;
-    holdStartedAtRef.current = 0;
-    setHoldProgress(0);
-  }, []);
 
   const clearMascotTimers = useCallback(() => {
     if (speechTimeoutRef.current) {
@@ -181,10 +155,9 @@ export function HomeScreen() {
     setSelectedSubjectId(subjectId);
     playUiSound('select');
     speakDialogue('success', 'happy');
-    clearHoldLoop();
     setHoveredTarget(null);
     hoveredRef.current = null;
-  }, [clearHoldLoop, playUiSound, setHoveredTarget, speakDialogue]);
+  }, [playUiSound, speakDialogue]);
 
   const updateHoverTarget = useCallback((nextTarget: HoverTarget) => {
     const nextHoverId = nextTarget ? `${nextTarget.type}:${nextTarget.id}` : null;
@@ -192,7 +165,6 @@ export function HomeScreen() {
 
     hoveredRef.current = nextHoverId;
     setHoveredTarget(nextTarget);
-    clearHoldLoop();
 
     if (hoverTimeoutRef.current) {
       window.clearTimeout(hoverTimeoutRef.current);
@@ -208,137 +180,29 @@ export function HomeScreen() {
     } else {
       setMascotState('idle');
     }
-  }, [clearHoldLoop, mascotSpeak, playUiSound, setMascotState]);
-
-  const beginHoldLoop = useCallback((targetKey: string) => {
-    clearHoldLoop();
-    holdTargetRef.current = targetKey;
-    holdStartedAtRef.current = performance.now();
-
-    const tick = (time: number) => {
-      if (holdTargetRef.current !== targetKey) return;
-
-      const progress = Math.min((time - holdStartedAtRef.current) / HOLD_DURATION_MS, 1);
-      setHoldProgress(progress);
-      holdFrameRef.current = requestAnimationFrame(tick);
-    };
-
-    holdFrameRef.current = requestAnimationFrame(tick);
-  }, [clearHoldLoop]);
+  }, [mascotSpeak, playUiSound, setMascotState]);
 
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    let alive = true;
+    if (didWelcomeRef.current) return;
+    didWelcomeRef.current = true;
+    mascotSpeak(mascotDialogues.home.join(' '));
+  }, [mascotSpeak]);
 
-    async function setupCamera() {
-      if (!videoRef.current) return;
-      try {
-        const nextStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 640 },
-            height: { ideal: 480 },
-            frameRate: { ideal: 30 },
-            facingMode: 'user',
-          },
-        });
-        if (!alive || !videoRef.current) {
-          nextStream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-
-        stream = nextStream;
-        videoRef.current.srcObject = nextStream;
-        videoRef.current.onloadedmetadata = async () => {
-          await videoRef.current?.play();
-          setCameraStatus('ready');
-        };
-      } catch (error) {
-        console.error('Error accessing webcam on home screen:', error);
-        if (alive) setCameraStatus('error');
-      }
-    }
-
-    setupCamera();
-
+  useEffect(() => {
     return () => {
-      alive = false;
-      stream?.getTracks().forEach((track) => track.stop());
       window.speechSynthesis?.cancel();
-      clearHoldLoop();
       clearMascotTimers();
       if (hoverTimeoutRef.current) window.clearTimeout(hoverTimeoutRef.current);
     };
-  }, [clearHoldLoop, clearMascotTimers]);
-
-  useEffect(() => {
-    if (!isHomeReady || didWelcomeRef.current) return;
-    didWelcomeRef.current = true;
-    mascotSpeak(mascotDialogues.home.join(' '));
-  }, [isHomeReady, mascotSpeak]);
-
-  useEffect(() => {
-    if (selectedSubjectId) {
-      clearHoldLoop();
-    }
-
-    if (!cursor || !isHomeReady) {
-      updateHoverTarget(null);
-      return;
-    }
-
-    const pointX = cursor.x * window.innerWidth;
-    const pointY = cursor.y * window.innerHeight;
-
-    let nextTarget: HoverTarget = null;
-
-    if (selectedSubject) {
-      if (popupBackRef.current) {
-        const rect = popupBackRef.current.getBoundingClientRect();
-        if (pointX >= rect.left && pointX <= rect.right && pointY >= rect.top && pointY <= rect.bottom) {
-          nextTarget = { type: 'popup-back', id: 'popup-back' };
-        }
-      }
-
-      if (!nextTarget) {
-        for (const game of selectedSubject.games) {
-          const element = popupGameRefs.current[game.id];
-          if (!element) continue;
-          const rect = element.getBoundingClientRect();
-          if (pointX >= rect.left && pointX <= rect.right && pointY >= rect.top && pointY <= rect.bottom) {
-            nextTarget = { type: 'game', id: game.id };
-            break;
-          }
-        }
-      }
-    } else {
-      for (const subject of subjects) {
-        const element = subjectRefs.current[subject.id];
-        if (!element) continue;
-        const rect = element.getBoundingClientRect();
-        if (pointX >= rect.left && pointX <= rect.right && pointY >= rect.top && pointY <= rect.bottom) {
-          nextTarget = { type: 'subject', id: subject.id };
-          break;
-        }
-      }
-    }
-
-    updateHoverTarget(nextTarget);
-  }, [clearHoldLoop, cursor, isHomeReady, selectedSubject, selectedSubjectId, updateHoverTarget]);
-
-  useEffect(() => {
-    if (!hoveredTarget) return;
-    beginHoldLoop(`${hoveredTarget.type}:${hoveredTarget.id}`);
-    return clearHoldLoop;
-  }, [beginHoldLoop, clearHoldLoop, hoveredTarget]);
+  }, [clearMascotTimers]);
 
   const resetSelection = useCallback(() => {
     setSelectedSubjectId(null);
     setHoveredTarget(null);
     setMascotState('idle');
     mascotSpeak('Pick a subject!');
-  }, [mascotSpeak, setHoveredTarget, setMascotState]);
+  }, [mascotSpeak, setMascotState]);
 
-  // UPDATED: Detects route OR externalUrl and routes appropriately
   const launchGame = useCallback((route?: string, externalUrl?: string) => {
     if (!route && !externalUrl) {
       setMascotState('thinking', 900);
@@ -353,30 +217,6 @@ export function HomeScreen() {
       navigate(route);
     }
   }, [mascotSpeak, navigate, playUiSound, setMascotState]);
-
-  useEffect(() => {
-    const nextIsPinching = Boolean(cursor?.isPinching);
-    const didClick = nextIsPinching && !previousPinchRef.current;
-    previousPinchRef.current = nextIsPinching;
-
-    if (!didClick || !hoveredTarget) return;
-
-    if (hoveredTarget.type === 'subject') {
-      openSubjectMenu(hoveredTarget.id);
-      return;
-    }
-
-    if (hoveredTarget.type === 'popup-back') {
-      resetSelection();
-      return;
-    }
-
-    // UPDATED: Pass both route and externalUrl from the gesture click
-    if (hoveredTarget.type === 'game' && selectedSubject) {
-      const targetGame = selectedSubject.games.find((game) => game.id === hoveredTarget.id);
-      launchGame(targetGame?.route, targetGame?.externalUrl);
-    }
-  }, [cursor?.isPinching, hoveredTarget, launchGame, openSubjectMenu, resetSelection, selectedSubject]);
 
   const homeTitleStyle = {
     fontFamily: '"Comic Sans MS", "Trebuchet MS", "Marker Felt", sans-serif',
@@ -397,8 +237,6 @@ export function HomeScreen() {
       <div className="absolute inset-0 bg-black/40" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_28%),radial-gradient(circle_at_bottom_left,rgba(34,211,238,0.18),transparent_30%),radial-gradient(circle_at_top_right,rgba(250,204,21,0.18),transparent_26%)]" />
 
-      <video ref={videoRef} playsInline muted className="absolute h-0 w-0 opacity-0 pointer-events-none" />
-
       <div className="relative z-10 min-h-screen px-5 pb-10 pt-8 sm:px-8 lg:px-12">
         <motion.div
           initial={{ opacity: 0, y: -24 }}
@@ -411,7 +249,7 @@ export function HomeScreen() {
                 className="inline-flex rounded-full border-[4px] border-white bg-pink-400 px-4 py-2 text-sm font-black uppercase tracking-[0.25em] text-white shadow-[0_10px_0_rgba(0,0,0,0.15)]"
                 style={{ fontFamily: '"Comic Sans MS", "Trebuchet MS", "Marker Felt", sans-serif' }}
               >
-                Wave to Choose
+                Click to Play
               </p>
             </div>
             <h1
@@ -429,8 +267,18 @@ export function HomeScreen() {
                 WebkitTextStroke: '2px #7c2d12',
               }}
             >
-              Float your finger over a subject card, then pinch in the air to pop it open.
+              Click on a subject card to see the games inside!
             </p>
+            <div className="mt-8">
+              <button
+                onClick={() => window.open('https://game-five-flax.vercel.app/', '_blank', 'noopener,noreferrer')}
+                className="inline-flex items-center gap-3 rounded-[30px] border-[5px] border-white bg-gradient-to-r from-purple-500 to-fuchsia-500 px-8 py-4 text-2xl font-black text-white shadow-[0_12px_0_rgba(134,25,143,0.8)] hover:translate-y-2 hover:shadow-[0_4px_0_rgba(134,25,143,0.8)] transition-all"
+                style={{ fontFamily: '"Comic Sans MS", "Trebuchet MS", "Marker Felt", sans-serif' }}
+              >
+                <span className="text-3xl animate-bounce">🌟</span>
+                Meet Your Favorite Personality!
+              </button>
+            </div>
           </div>
 
           <div className="grid gap-5 sm:grid-cols-2 xl:max-w-4xl">
@@ -439,68 +287,16 @@ export function HomeScreen() {
                 <SubjectCard
                   subject={subject}
                   isHovered={hoveredTarget?.type === 'subject' && hoveredTarget.id === subject.id}
-                  holdProgress={hoveredTarget?.type === 'subject' && hoveredTarget.id === subject.id ? holdProgress : 0}
+                  holdProgress={0}
                   onClick={() => openSubjectMenu(subject.id)}
                   onMouseEnter={() => updateHoverTarget({ type: 'subject', id: subject.id })}
                   onMouseLeave={() => updateHoverTarget(null)}
-                  setRef={(element) => {
-                    subjectRefs.current[subject.id] = element;
-                  }}
                 />
               </div>
             ))}
           </div>
         </motion.div>
       </div>
-
-      <AnimatePresence>
-        {!isHomeReady && cameraStatus !== 'error' && (
-          <motion.div
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            className="absolute left-6 top-6 z-[60] rounded-[30px] border-[4px] border-white bg-cyan-400 px-5 py-3 shadow-[0_14px_0_rgba(0,0,0,0.18)]"
-          >
-            <p
-              className="text-lg font-black text-slate-900"
-              style={{ fontFamily: '"Comic Sans MS", "Trebuchet MS", "Marker Felt", sans-serif' }}
-            >
-              Camera waking up...
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {cameraStatus === 'error' && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-[80] flex items-center justify-center bg-slate-950/85 px-6"
-          >
-            <div className="max-w-xl rounded-[36px] border-[5px] border-white bg-rose-400 p-8 text-center shadow-[0_22px_0_rgba(0,0,0,0.18)]">
-              <p
-                className="text-3xl font-black text-white"
-                style={{ fontFamily: '"Comic Sans MS", "Trebuchet MS", "Marker Felt", sans-serif' }}
-              >
-                Camera needed!
-              </p>
-              <p className="mt-4 text-lg font-black text-rose-950">
-                Let PlaySpark see your hand so the cards can light up and respond.
-              </p>
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="mt-6 rounded-[24px] border-[4px] border-white bg-yellow-300 px-6 py-3 text-lg font-black text-rose-700 shadow-[0_10px_0_rgba(0,0,0,0.16)]"
-                style={{ fontFamily: '"Comic Sans MS", "Trebuchet MS", "Marker Felt", sans-serif' }}
-              >
-                Try Again
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {selectedSubject && (
@@ -530,7 +326,6 @@ export function HomeScreen() {
                   </h2>
                 </div>
                 <button
-                  ref={popupBackRef}
                   type="button"
                   onClick={resetSelection}
                   onMouseEnter={() => updateHoverTarget({ type: 'popup-back', id: 'popup-back' })}
@@ -545,13 +340,9 @@ export function HomeScreen() {
                 {selectedSubject.games.map((game) => (
                   <motion.button
                     key={game.id}
-                    ref={(element) => {
-                      popupGameRefs.current[game.id] = element;
-                    }}
                     type="button"
                     whileHover={{ scale: 1.03, rotate: -1 }}
                     whileTap={{ scale: 0.98 }}
-                    // UPDATED: Now supports passing the externalURL mapping 
                     onClick={() => launchGame(game.route, game.externalUrl)}
                     onMouseEnter={() => updateHoverTarget({ type: 'game', id: game.id })}
                     onMouseLeave={() => updateHoverTarget(null)}
@@ -579,7 +370,6 @@ export function HomeScreen() {
                         <p className="mt-2 text-base font-black text-slate-700">{game.description}</p>
                       </div>
                       
-                      {/* UPDATED UI: Distinct look for Web Apps vs Internal Games */}
                       <div className="rounded-full border-[4px] border-white bg-white px-4 py-2 text-sm font-black uppercase tracking-[0.2em] text-slate-800">
                         {game.status === 'ready' ? (game.externalUrl ? 'Play ↗' : 'Play') : 'Soon'}
                       </div>
@@ -594,7 +384,6 @@ export function HomeScreen() {
       </AnimatePresence>
 
       <Mascot state={mascotState} line={mascotLine} nonce={mascotNonce} />
-      <GestureCursor cursor={cursor} holdProgress={holdProgress} isVisible={isHomeReady} />
     </main>
   );
 }

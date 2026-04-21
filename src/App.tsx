@@ -10,6 +10,8 @@ import { MathEquationRoute } from './routes/MathEquationRoute';
 import { ParentDashboardRoute } from './routes/ParentDashboardRoute';
 import { SpeechTherapyRoute } from './routes/SpeechTherapyRoute';
 import { DeafLuminaRoute } from './routes/DeafLuminaRoute';
+import { SpeechMatchingRoute } from './routes/SpeechMatchingRoute';
+import { DrawingMultiplayerRoute } from './routes/DrawingMultiplayerRoute';
 
 function NotFoundPage() {
   return (
@@ -139,7 +141,9 @@ export default function App() {
       <Route path="/math-equations" element={<MathEquationRoute />} />
       <Route path="/parent-dashboard" element={<ParentDashboardRoute />} />
       <Route path="/speech-therapy" element={<SpeechTherapyRoute />} />
-<Route path="/deaf-lumina" element={<DeafLuminaRoute />} />
+      <Route path="/speech-matching" element={<SpeechMatchingRoute />} />
+      <Route path="/deaf-lumina" element={<DeafLuminaRoute />} />
+      <Route path="/drawing-multiplayer" element={<DrawingMultiplayerRoute />} />
       <Route path="*" element={<NotFoundPage />} />
       
     </Routes>

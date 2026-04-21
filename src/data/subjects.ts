@@ -34,6 +34,13 @@ export const subjects: SubjectDefinition[] = [
         description: 'Use your voice to cast magic spells and move obstacles!',
         status: 'ready',
         route: '/speech-therapy',
+      },
+      {
+        id: 'speech-matching',
+        title: 'Categorize It!',
+        description: 'Match objects to their categories using your voice!',
+        status: 'ready',
+        route: '/speech-matching',
       }
     ]
   },
@@ -116,6 +123,13 @@ export const subjects: SubjectDefinition[] = [
         route: '/science-solar',
         status: 'ready',
       },
+      {
+        id: 'science-advanced',
+        title: 'Science Advanced',
+        description: 'Explore advanced chemistry concepts and experiments!',
+        status: 'ready',
+        externalUrl: 'https://chemistrygame-cyan.vercel.app/',
+      },
     ],
   },
   {
@@ -151,6 +165,13 @@ export const subjects: SubjectDefinition[] = [
         description: 'Jump, duck, and move to play the game!',
         status: 'ready',
         externalUrl: 'https://exercisesfinal.vercel.app/', 
+      },
+      {
+        id: 'exercise-advanced',
+        title: 'Exercise Game',
+        description: 'Another fun way to stay active and healthy!',
+        status: 'ready',
+        externalUrl: 'https://exercisegamee.vercel.app/',
       }
     ]
   },
@@ -180,4 +201,22 @@ export const subjects: SubjectDefinition[] = [
       }
     ]
   },
+  {
+    id: 'drawing',
+    name: 'Drawing',
+    emoji: '🎨',
+    accent: '#f43f5e', // Rose
+    shadow: 'rgba(244, 63, 94, 0.35)',
+    textStroke: '#9f1239',
+    mascotPrompt: 'Let\'s create a masterpiece together!',
+    games: [
+      {
+        id: 'drawing-multiplayer',
+        title: 'Multiplayer Drawing',
+        description: 'Draw and color objects together with your friend!',
+        status: 'ready',
+        route: '/drawing-multiplayer',
+      }
+    ]
+  }
 ];

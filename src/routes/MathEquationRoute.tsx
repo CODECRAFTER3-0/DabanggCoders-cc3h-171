@@ -438,12 +438,20 @@ export function MathEquationRoute() {
   }, [handTrackingReady, gameStatus, currentWord, timeLeft, playSound, speak, startRound]);
 
   useEffect(() => {
+    const videoEl = videoRef.current;
+    let activeStream: MediaStream | null = null;
+    let isMounted = true;
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } })
       .then(stream => { 
-        if (videoRef.current) { 
-          videoRef.current.srcObject = stream; 
-          videoRef.current.onloadedmetadata = () => {
-            videoRef.current?.play().catch(console.error);
+        if (!isMounted) {
+          stream.getTracks().forEach(t => t.stop());
+          return;
+        }
+        activeStream = stream;
+        if (videoEl) { 
+          videoEl.srcObject = stream; 
+          videoEl.onloadedmetadata = () => {
+            videoEl?.play().catch(console.error);
           };
         } 
       })
@@ -451,6 +459,17 @@ export function MathEquationRoute() {
         console.error("Camera Error:", err);
         setCameraError(true);
       });
+      
+    return () => {
+      isMounted = false;
+      if (activeStream) {
+        activeStream.getTracks().forEach(t => t.stop());
+      }
+      if (videoEl) {
+        videoEl.pause();
+        videoEl.srcObject = null;
+      }
+    };
   }, []);
 
   const handleRestart = () => {
